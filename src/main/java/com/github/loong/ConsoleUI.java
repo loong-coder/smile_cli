@@ -4,10 +4,13 @@ import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
+import org.jline.reader.Widget;
+import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
 import java.io.IOException;
+import java.util.List;
 
 public class ConsoleUI implements AutoCloseable {
 
@@ -30,7 +33,25 @@ public class ConsoleUI implements AutoCloseable {
                 .build();
         this.reader = LineReaderBuilder.builder()
                 .terminal(terminal)
+                .completer(new StringsCompleter(List.of("/exit", "/quit", "/help")))
+                .option(LineReader.Option.AUTO_LIST, true)
+                .option(LineReader.Option.AUTO_MENU, true)
+                .option(LineReader.Option.MENU_COMPLETE, true)
                 .build();
+
+        Widget slashComplete = new Widget() {
+            @Override
+            public boolean apply() {
+                if (reader.getBuffer().cursor() == 0) {
+                    reader.getBuffer().write('/');
+                    reader.callWidget(LineReader.COMPLETE_WORD);
+                } else {
+                    reader.getBuffer().write('/');
+                }
+                return true;
+            }
+        };
+        reader.getKeyMaps().get(LineReader.EMACS).bind(slashComplete, "/");
     }
 
     public void showWelcome() {
