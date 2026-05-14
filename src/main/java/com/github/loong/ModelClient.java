@@ -1,6 +1,7 @@
 package com.github.loong;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.loong.message.Message;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -10,6 +11,7 @@ import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 import okhttp3.sse.EventSources;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -34,7 +36,7 @@ public class ModelClient implements AutoCloseable {
         this.objectMapper = new ObjectMapper();
     }
 
-    public void chat(List<Map<String, String>> messages,
+    public void chat(List<Message> messages,
                      Consumer<String> onToken,
                      Consumer<String> onError) throws Exception {
 
@@ -43,9 +45,14 @@ public class ModelClient implements AutoCloseable {
             throw new IllegalStateException("DEEPSEEK_API_KEY environment variable is not set");
         }
 
+        List<Map<String, Object>> msgMaps = new ArrayList<>();
+        for (Message msg : messages) {
+            msgMaps.add(msg.toMap());
+        }
+
         Map<String, Object> body = Map.of(
                 "model", config.getModelName(),
-                "messages", messages,
+                "messages", msgMaps,
                 "stream", true
         );
 

@@ -1,9 +1,11 @@
 package com.github.loong;
 
+import com.github.loong.message.AssistantMessage;
+import com.github.loong.message.Message;
+import com.github.loong.message.UserMessage;
+
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class Main {
 
@@ -21,7 +23,7 @@ public class Main {
 
             ui.showWelcome();
 
-            List<Map<String, String>> messages = new ArrayList<>();
+            List<Message> messages = new ArrayList<>();
 
             while (true) {
                 String input = ui.readInput("> ");
@@ -49,9 +51,7 @@ public class Main {
                     continue;
                 }
 
-                Map<String, String> userMsg = new HashMap<>();
-                userMsg.put("role", "user");
-                userMsg.put("content", input);
+                UserMessage userMsg = new UserMessage(input);
                 messages.add(userMsg);
 
                 StringBuilder response = new StringBuilder();
@@ -67,9 +67,7 @@ public class Main {
 
                     String fullResponse = response.toString();
                     if (!fullResponse.isEmpty()) {
-                        Map<String, String> assistantMsg = new HashMap<>();
-                        assistantMsg.put("role", "assistant");
-                        assistantMsg.put("content", fullResponse);
+                        AssistantMessage assistantMsg = new AssistantMessage(fullResponse);
                         messages.add(assistantMsg);
                     } else {
                         messages.remove(messages.size() - 1);
