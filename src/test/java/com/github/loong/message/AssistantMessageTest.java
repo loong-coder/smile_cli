@@ -25,7 +25,7 @@ public class AssistantMessageTest extends TestCase {
                 "call_1",
                 "get_weather_data",
                 "{\"location\":\"Beijing\"}");
-        AssistantMessage message = new AssistantMessage(null, List.of(call));
+        AssistantMessage message = new AssistantMessage(null, null, List.of(call));
 
         Map<String, Object> map = message.toMap();
 

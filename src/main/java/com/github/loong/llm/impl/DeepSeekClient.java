@@ -195,6 +195,7 @@ public class DeepSeekClient implements LLmClient {
 
         private final ObjectMapper objectMapper = new ObjectMapper();
         private final StringBuilder content = new StringBuilder();
+        private final StringBuilder reasonContext = new StringBuilder();
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
         private String finishReason;
 
@@ -224,6 +225,10 @@ public class DeepSeekClient implements LLmClient {
             if (contentValue != null) {
                 token = contentValue.toString();
                 content.append(token);
+            }
+            Object reasonContextValue = delta.get("reasoning_content");
+            if (reasonContextValue != null) {
+                reasonContext.append(reasonContextValue);
             }
             collectToolCalls(delta);
             return token;
@@ -265,7 +270,7 @@ public class DeepSeekClient implements LLmClient {
             for (ToolCallBuilder builder : toolCalls.values()) {
                 calls.add(new AssistantMessage.ToolCall(builder.id, builder.name, builder.arguments.toString()));
             }
-            return new ChatResult(content.toString(), calls, finishReason);
+            return new ChatResult(content.toString(), reasonContext.toString(), calls, finishReason);
         }
     }
 

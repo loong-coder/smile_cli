@@ -119,19 +119,21 @@ public class ChatLoop {
         for (int round = 0; round < maxToolRounds; round++) {
             @SuppressWarnings("resource")
             ChatResult result = context.llmClient().chat(messages, context.toolDefinitions(), ui::printToken, ui::printError);
-            if (!result.hasToolCalls()) {
-                if (!result.content().isEmpty()) {
-                    messages.add(new AssistantMessage(result.content()));
-                } else {
-                    messages.add(new AssistantMessage("[模型未返回有效内容，本轮回复失败]"));
+            // 存在工具调用 调用工具后返回
+            if (result.hasToolCalls()) {
+                messages.add(new AssistantMessage(result.content(), result.reasoningContent(), result.toolCalls()));
+                for (AssistantMessage.ToolCall call : result.toolCalls()) {
+                    messages.add(new ToolMessage(call.id(), context.toolCallExecutor().execute(call)));
                 }
-                return;
+                continue;
             }
 
-            messages.add(new AssistantMessage(result.content(), result.toolCalls()));
-            for (AssistantMessage.ToolCall call : result.toolCalls()) {
-                messages.add(new ToolMessage(call.id(), context.toolCallExecutor().execute(call)));
+            if (!result.content().isEmpty()) {
+                messages.add(new AssistantMessage(result.content()));
+            } else {
+                messages.add(new AssistantMessage("[模型未返回有效内容，本轮回复失败]"));
             }
+            return;
         }
         messages.add(new AssistantMessage("[工具调用轮次过多，本轮回复中止]"));
     }

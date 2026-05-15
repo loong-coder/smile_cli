@@ -7,14 +7,16 @@ import java.util.Map;
 public class AssistantMessage extends Message {
 
     private final String content;
+    private final String reasoningContent;
     private final List<ToolCall> toolCalls;
 
     public AssistantMessage(String content) {
-        this(content, List.of());
+        this(content, null, List.of());
     }
 
-    public AssistantMessage(String content, List<ToolCall> toolCalls) {
+    public AssistantMessage(String content, String reasoningContent, List<ToolCall> toolCalls) {
         this.content = content;
+        this.reasoningContent = reasoningContent;
         this.toolCalls = toolCalls == null ? List.of() : List.copyOf(toolCalls);
     }
 
@@ -27,8 +29,16 @@ public class AssistantMessage extends Message {
         return content;
     }
 
+    public String getReasoningContent() {
+        return reasoningContent;
+    }
+
     public List<ToolCall> getToolCalls() {
         return toolCalls;
+    }
+
+    public boolean hasReasoningContent() {
+        return reasoningContent != null && !reasoningContent.isBlank();
     }
 
     @Override
@@ -39,6 +49,9 @@ public class AssistantMessage extends Message {
         if (!toolCalls.isEmpty()) {
             List<Map<String, Object>> callMaps = toolCalls.stream().map(ToolCall::toMap).toList();
             map.put("tool_calls", callMaps);
+        }
+        if (reasoningContent != null && !reasoningContent.isBlank()) {
+            map.put("reasoning_content", reasoningContent);
         }
         return map;
     }
