@@ -46,7 +46,7 @@ public class TerminalManager implements AutoCloseable {
                 .build();
         this.reader = LineReaderBuilder.builder()
                 .terminal(terminal)
-                .completer(new StringsCompleter(List.of("/exit", "/quit", "/help")))
+                .completer(new StringsCompleter(List.of("/exit", "/quit", "/help", "/tools", "/clear")))
                 .option(LineReader.Option.AUTO_LIST, true)
                 .option(LineReader.Option.AUTO_MENU, true)
                 .option(LineReader.Option.MENU_COMPLETE, true)
@@ -111,6 +111,12 @@ public class TerminalManager implements AutoCloseable {
         terminal.writer().flush();
     }
 
+    public void clearScreen() {
+        // 清屏后把光标移回左上角，兼容常见 ANSI 终端。
+        terminal.writer().print("\033[H\033[2J");
+        terminal.writer().flush();
+    }
+
     @Override
     public void close() {
         try {
@@ -158,7 +164,7 @@ public class TerminalManager implements AutoCloseable {
         lines.add(panelLine("  Workspace - " + workspace, "", frameWidth));
         lines.add(panelDivider(frameWidth));
         lines.add(panelLine("  Commands", "Tips", frameWidth));
-        lines.add(panelLine("  /help   show commands", "Type a message to start chatting", frameWidth));
+        lines.add(panelLine("  /help   show commands", "Use /clear to clear console output", frameWidth));
         lines.add(bottom(frameWidth));
         return lines;
     }

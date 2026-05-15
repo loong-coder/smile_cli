@@ -37,9 +37,10 @@ public class ConsoleUITest extends TestCase {
         assertTrue(output.contains("PowerShell"));
     }
 
-    public void testWelcomeCommandsOnlyShowsHelp() {
+    public void testWelcomeCommandsShowLocalCommandTips() {
         String output = String.join("\n", TerminalManager.renderWelcomeLines("deepseek v4 pro", "smile_cli", 100));
         assertTrue(output.contains("/help   show commands"));
+        assertTrue(output.contains("Use /clear to clear console output"));
         assertFalse(output.contains("/exit   exit"));
         assertFalse(output.contains("/quit   exit"));
     }

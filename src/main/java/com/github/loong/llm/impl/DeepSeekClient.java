@@ -12,9 +12,12 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 import okhttp3.sse.EventSources;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -26,6 +29,7 @@ import java.util.function.Consumer;
 
 public class DeepSeekClient implements LLmClient {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(DeepSeekClient.class);
     private static final MediaType JSON = MediaType.parse("application/json");
 
     private final LlmConfig config;
@@ -79,17 +83,21 @@ public class DeepSeekClient implements LLmClient {
                         onToken.accept(token);
                     }
                 } catch (Exception e) {
-                    System.err.println("Warning: failed to parse SSE chunk: " + e.getMessage());
+                    LOGGER.error("Failed to parse DeepSeek SSE chunk", e);
                 }
             }
 
             @Override
             public void onFailure(EventSource eventSource, Throwable t, Response response) {
                 if (t != null) {
+                    LOGGER.error("DeepSeek stream connection failed", t);
                     onError.accept(t.getMessage());
                 } else if (response != null) {
+                    String responseBody = responseBodyText(response);
+                    LOGGER.error("DeepSeek stream failed: HTTP {} {} {}", response.code(), response.message(), responseBody);
                     onError.accept("HTTP " + response.code() + " " + response.message());
                 } else {
+                    LOGGER.error("DeepSeek stream connection failed");
                     onError.accept("Stream connection failed");
                 }
                 latch.countDown();
@@ -111,6 +119,20 @@ public class DeepSeekClient implements LLmClient {
             activeEventSource.cancel();
         }
         return accumulator.result();
+    }
+
+    static String responseBodyText(Response response) {
+        // 记录 DeepSeek 返回体，方便定位 HTTP 400 等接口错误。
+        ResponseBody body = response.body();
+        if (body == null) {
+            return "";
+        }
+        try {
+            return body.string();
+        } catch (Exception e) {
+            LOGGER.error("Failed to read DeepSeek error response body", e);
+            return "";
+        }
     }
 
     static Map<String, Object> buildRequestBody(String model, List<Message> messages, List<ToolDefinition> tools) {

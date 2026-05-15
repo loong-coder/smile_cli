@@ -3,6 +3,8 @@ package com.github.loong.tool;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.loong.message.AssistantMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -10,6 +12,9 @@ import java.util.Map;
  * 执行模型返回的工具调用，并把执行结果转换为工具消息内容。
  */
 public class ToolCallExecutor {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallExecutor.class);
+    private static final int MAX_LOG_ARGUMENT_CHARS = 4096;
 
     private final ToolRegistry registry;
     private final ObjectMapper objectMapper;
@@ -36,6 +41,7 @@ public class ToolCallExecutor {
         try {
             return executeOrThrow(call);
         } catch (Exception e) {
+            LOGGER.error("{}", failureLogMessage(call, e), e);
             return errorJson(e);
         }
     }
@@ -60,6 +66,33 @@ public class ToolCallExecutor {
         }
         return objectMapper.readValue(argumentsJson, new TypeReference<Map<String, Object>>() {
         });
+    }
+
+    static String failureLogMessage(AssistantMessage.ToolCall call, Exception e) {
+        String errorType = e.getClass().getName();
+        String errorMessage = e.getMessage() == null ? "" : e.getMessage();
+        if (call == null) {
+            return "Tool call execution failed: callId=<null>, toolName=<null>, argumentsJson=<null>, errorType="
+                    + errorType + ", errorMessage=" + errorMessage;
+        }
+        return "Tool call execution failed: callId=" + nullSafe(call.id())
+                + ", toolName=" + nullSafe(call.name())
+                + ", argumentsJson=" + truncateArguments(call.argumentsJson())
+                + ", errorType=" + errorType
+                + ", errorMessage=" + errorMessage;
+    }
+
+    private static String truncateArguments(String argumentsJson) {
+        // 入参可能很长，日志只截断展示，完整错误仍通过堆栈定位。
+        String value = nullSafe(argumentsJson);
+        if (value.length() <= MAX_LOG_ARGUMENT_CHARS) {
+            return value;
+        }
+        return value.substring(0, MAX_LOG_ARGUMENT_CHARS) + "...<truncated>";
+    }
+
+    private static String nullSafe(String value) {
+        return value == null ? "<null>" : value;
     }
 
     private String errorJson(Exception e) {
