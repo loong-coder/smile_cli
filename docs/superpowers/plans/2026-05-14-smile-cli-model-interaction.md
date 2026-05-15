@@ -2,11 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 实现通过终端与 DeepSeek 模型进行流式对话的 Java CLI 工具
+**Goal:** 实现通过终端与 DeepSeek 模型进行流式对话的 Java CLI 工具。
 
-**Architecture:** 4 个类按依赖顺序构建 — ConfigManager 管理配置，ConsoleUI 处理终端交互，ModelClient 封装 SSE 流式 API 调用，Main 编排交互循环。使用 JLine 做终端 UI，OkHttp+SSE 做 HTTP 流式通信，Jackson 做 JSON 序列化。
+**Architecture:** 当前实现按职责拆成配置、终端 UI、消息类型、模型客户端抽象、DeepSeek 具体客户端、客户端工厂、Main 编排入口：
 
-**Tech Stack:** Java 17, Maven, JLine 3.25.1, OkHttp 4.12.0, OkHttp SSE 4.12.0, Jackson 2.17.0, Maven Shade Plugin 3.5.1
+- `com.github.loong.config.LlmConfig`：读取 `~/.smile_cli/config` 与 `DEEPSEEK_API_KEY`，提供模型名、展示版本、base URL、API key 状态。
+- `com.github.loong.message.Message` 及子类：用强类型消息替代 `Map<String, String>`，由 `toMap()` 转换为 API 请求体。
+- `com.github.loong.model.LLmClient`：模型客户端接口，负责流式对话、取消与关闭资源。
+- `com.github.loong.model.DeepSeekClient`：基于 OkHttp SSE 调用 DeepSeek OpenAI-compatible chat completions API。
+- `com.github.loong.model.LLmClientFactoryBuilder`：从 `LlmConfig` 构建 `LLmClient`，当前返回 `DeepSeekClient`。
+- `com.github.loong.ui.ConsoleUI`：JLine 终端输入、命令补全、欢迎页、错误页和彩色输出。
+- `com.github.loong.Main`：初始化配置/UI/client，维护 `List<Message>` 对话历史并驱动交互循环。
+
+**Type sync notes:**
+
+- 旧 `ConfigManager` 已同步为 `LlmConfig`。
+- 旧 `ModelClient` 已拆为 `LLmClient` 接口 + `DeepSeekClient` 实现。
+- 旧 `List<Map<String, String>> messages` 已同步为 `List<Message>`，用户和助手消息分别使用 `UserMessage`、`AssistantMessage`。
+- 工厂类型为 `LLmClientFactoryBuilder.fromConfig(LlmConfig).build()`，返回接口类型 `LLmClient`。
+
+**Tech Stack:** Java 21, Maven, JLine 3.25.1, OkHttp 4.12.0, OkHttp SSE 4.12.0, Jackson 2.17.0, Maven Shade Plugin 3.5.1, JUnit 3.8.1
 
 ---
 
@@ -15,604 +30,414 @@
 **Files:**
 - Modify: `pom.xml`
 
-- [ ] **Step 1: Update pom.xml**
+- [ ] **Step 1: Configure Java and dependency versions**
 
-Replace the entire pom.xml with the following:
+Use Java 21 and keep dependency versions in Maven properties:
 
 ```xml
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <groupId>com.github.loong</groupId>
-    <artifactId>smile_cli</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
-
-    <name>smile_cli</name>
-
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-    </properties>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.jline</groupId>
-            <artifactId>jline</artifactId>
-            <version>3.25.1</version>
-        </dependency>
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>4.12.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp-sse</artifactId>
-            <version>4.12.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>2.17.0</version>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>3.8.1</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.1</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.github.loong.Main</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+<properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <jline.version>3.25.1</jline.version>
+    <okhttp.version>4.12.0</okhttp.version>
+    <jackson.version>2.17.0</jackson.version>
+    <junit.version>3.8.1</junit.version>
+</properties>
 ```
 
-- [ ] **Step 2: Verify Maven build works**
+- [ ] **Step 2: Add runtime and test dependencies**
+
+Required dependencies:
+
+- `org.jline:jline:${jline.version}`
+- `com.squareup.okhttp3:okhttp:${okhttp.version}`
+- `com.squareup.okhttp3:okhttp-sse:${okhttp.version}`
+- `com.fasterxml.jackson.core:jackson-databind:${jackson.version}`
+- `junit:junit:${junit.version}` with `test` scope
+
+- [ ] **Step 3: Configure executable shaded JAR**
+
+Use `maven-shade-plugin` with:
+
+- `ManifestResourceTransformer` main class: `com.github.loong.Main`
+- `ServicesResourceTransformer` for service metadata merging
+
+- [ ] **Step 4: Verify Maven build works**
 
 ```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn compile
+mvn compile
 ```
 
-Expected: BUILD SUCCESS with new dependencies downloaded.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add pom.xml
-git commit -m "build: add JLine, OkHttp, Jackson deps, Java 17, Shade plugin"
-```
+Expected: `BUILD SUCCESS`.
 
 ---
 
-### Task 2: Implement ConfigManager
+### Task 2: Implement LlmConfig
 
 **Files:**
-- Create: `src/main/java/com/github/loong/ConfigManager.java`
+- Create/modify: `src/main/java/com/github/loong/config/LlmConfig.java`
 
-- [ ] **Step 1: Create ConfigManager.java**
+- [ ] **Step 1: Define configuration type**
+
+`LlmConfig` owns all model/API configuration:
 
 ```java
-package com.github.loong;
+package com.github.loong.config;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Properties;
-
-public class ConfigManager {
-
-    private final Properties props;
-
-    private static final String DEFAULT_MODEL_NAME = "deepseek-chat";
-    private static final String DEFAULT_DISPLAY_VERSION = "deepseek v4 pro";
-    private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
-
-    public ConfigManager() {
-        this.props = new Properties();
-        props.setProperty("model.name", DEFAULT_MODEL_NAME);
-        props.setProperty("model.displayVersion", DEFAULT_DISPLAY_VERSION);
-        props.setProperty("api.baseUrl", DEFAULT_BASE_URL);
-
-        loadConfigFile();
-    }
-
-    private void loadConfigFile() {
-        Path configPath = Paths.get(System.getProperty("user.home"), ".smile_cli", "config");
-        if (Files.exists(configPath)) {
-            try (InputStream in = Files.newInputStream(configPath)) {
-                Properties fileProps = new Properties();
-                fileProps.load(in);
-                props.putAll(fileProps);
-            } catch (IOException e) {
-                // ignore malformed config, use defaults
-            }
-        }
-    }
-
-    public String getModelName() {
-        return props.getProperty("model.name");
-    }
-
-    public String getDisplayVersion() {
-        return props.getProperty("model.displayVersion");
-    }
-
-    public String getBaseUrl() {
-        String url = props.getProperty("api.baseUrl");
-        if (url.endsWith("/")) {
-            url = url.substring(0, url.length() - 1);
-        }
-        return url;
-    }
-
-    public String getApiKey() {
-        return System.getenv("DEEPSEEK_API_KEY");
-    }
+public class LlmConfig {
+    public String getModelName();
+    public String getDisplayVersion();
+    public String getBaseUrl();
+    public String getApiKey();
+    public boolean hasApiKey();
 }
 ```
 
-- [ ] **Step 2: Verify compilation**
+- [ ] **Step 2: Load defaults and config file**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn compile
+Defaults:
+
+- `model.name=deepseek-v4-pro`
+- `model.displayVersion=deepseek v4 pro`
+- `api.baseUrl=https://api.deepseek.com`
+
+Load optional overrides from:
+
+```text
+~/.smile_cli/config
 ```
 
-Expected: BUILD SUCCESS
+- [ ] **Step 3: Read API key from environment**
 
-- [ ] **Step 3: Commit**
+`getApiKey()` reads:
 
-```bash
-git add src/main/java/com/github/loong/ConfigManager.java
-git commit -m "feat: add ConfigManager for ~/.smile_cli/config and env var support"
+```text
+DEEPSEEK_API_KEY
 ```
+
+`hasApiKey()` returns `true` only when the key is non-null and non-blank.
+
+- [ ] **Step 4: Normalize base URL**
+
+`getBaseUrl()` should remove a trailing `/` so API paths can be appended safely.
 
 ---
 
-### Task 3: Implement ConsoleUI
+### Task 3: Implement strongly typed messages
 
 **Files:**
-- Create: `src/main/java/com/github/loong/ConsoleUI.java`
+- Create/modify: `src/main/java/com/github/loong/message/Message.java`
+- Create/modify: `src/main/java/com/github/loong/message/UserMessage.java`
+- Create/modify: `src/main/java/com/github/loong/message/AssistantMessage.java`
+- Create/modify: `src/main/java/com/github/loong/message/SystemMessage.java`
+- Create/modify: `src/main/java/com/github/loong/message/ToolMessage.java`
 
-- [ ] **Step 1: Create ConsoleUI.java**
+- [ ] **Step 1: Define Message base type**
 
 ```java
-package com.github.loong;
+package com.github.loong.message;
 
-import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.EndOfFileException;
-import org.jline.reader.UserInterruptException;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
+import java.util.Map;
 
-import java.io.IOException;
+public abstract class Message {
+    public abstract String getRole();
+    public abstract Map<String, Object> toMap();
+}
+```
+
+- [ ] **Step 2: Implement content messages**
+
+`UserMessage`、`AssistantMessage`、`SystemMessage` each store `content`, expose `getContent()`, return the correct role, and serialize to:
+
+```java
+Map.of("role", role, "content", content)
+```
+
+Use `LinkedHashMap` when preserving JSON field order is useful.
+
+- [ ] **Step 3: Implement ToolMessage**
+
+`ToolMessage` stores `toolCallId` and `content`, returns role `tool`, and serializes to:
+
+```java
+{
+    "role": "tool",
+    "tool_call_id": toolCallId,
+    "content": content
+}
+```
+
+- [ ] **Step 4: Use typed messages everywhere**
+
+Application conversation history should be:
+
+```java
+List<Message> messages = new ArrayList<>();
+```
+
+Do not pass `List<Map<String, String>>` through the app layer.
+
+---
+
+### Task 4: Implement ConsoleUI
+
+**Files:**
+- Create/modify: `src/main/java/com/github/loong/ui/ConsoleUI.java`
+
+- [ ] **Step 1: Use LlmConfig in UI constructor**
+
+```java
+package com.github.loong.ui;
+
+import com.github.loong.config.LlmConfig;
 
 public class ConsoleUI implements AutoCloseable {
-
-    private static final String ANSI_RESET = "[0m";
-    private static final String ANSI_CYAN = "[36m";
-    private static final String ANSI_GREEN = "[32m";
-    private static final String ANSI_RED = "[31m";
-    private static final String ANSI_BOLD = "[1m";
-    private static final String ANSI_YELLOW = "[33m";
-
-    private final Terminal terminal;
-    private final LineReader reader;
-    private final ConfigManager config;
-
-    public ConsoleUI(ConfigManager config) throws IOException {
-        this.config = config;
-        this.terminal = TerminalBuilder.builder()
-                .system(true)
-                .jansi(true)
-                .build();
-        this.reader = LineReaderBuilder.builder()
-                .terminal(terminal)
-                .build();
-    }
-
-    public void showWelcome() {
-        String banner =
-                ANSI_CYAN + ANSI_BOLD +
-                "  ╔═════════════════════════════════════════╗\n" +
-                "  ║                                         ║\n" +
-                "  ║         " + ANSI_YELLOW + "S M I L E   C L I" + ANSI_CYAN + "               ║\n" +
-                "  ║                                         ║\n" +
-                "  ╠═════════════════════════════════════════╣\n" +
-                "  ║  Model: " + ANSI_RESET + ANSI_GREEN + padRight(config.getDisplayVersion(), 28) + ANSI_CYAN + " ║\n" +
-                "  ║  Type /help for commands                ║\n" +
-                "  ╚═════════════════════════════════════════╝\n" +
-                ANSI_RESET;
-        terminal.writer().println(banner);
-        terminal.writer().flush();
-    }
-
-    public String readInput(String prompt) {
-        try {
-            String line = reader.readLine(ANSI_GREEN + prompt + ANSI_RESET);
-            return line;
-        } catch (EndOfFileException e) {
-            return null; // Ctrl+D
-        } catch (UserInterruptException e) {
-            return ""; // Ctrl+C on empty line
-        }
-    }
-
-    public void printToken(String token) {
-        terminal.writer().print(token);
-        terminal.writer().flush();
-    }
-
-    public void printInfo(String msg) {
-        terminal.writer().println(ANSI_CYAN + msg + ANSI_RESET);
-        terminal.writer().flush();
-    }
-
-    public void printError(String msg) {
-        terminal.writer().println(ANSI_RED + ANSI_BOLD + "  Error: " + msg + ANSI_RESET);
-        terminal.writer().flush();
-    }
-
-    public void println() {
-        terminal.writer().println();
-        terminal.writer().flush();
-    }
-
-    @Override
-    public void close() {
-        try {
-            terminal.close();
-        } catch (IOException e) {
-            // ignore
-        }
-    }
-
-    private static String padRight(String s, int n) {
-        if (s.length() >= n) return s;
-        return s + " ".repeat(n - s.length());
-    }
+    public ConsoleUI(LlmConfig config) throws IOException;
 }
 ```
 
-- [ ] **Step 2: Verify compilation**
+- [ ] **Step 2: Configure JLine terminal and reader**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn compile
-```
+Use JLine `TerminalBuilder` and `LineReaderBuilder` with command completion for:
 
-Expected: BUILD SUCCESS
+- `/exit`
+- `/quit`
+- `/help`
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Render terminal output**
 
-```bash
-git add src/main/java/com/github/loong/ConsoleUI.java
-git commit -m "feat: add ConsoleUI with welcome banner, colored output, JLine reader"
-```
-
----
-
-### Task 4: Implement ModelClient
-
-**Files:**
-- Create: `src/main/java/com/github/loong/ModelClient.java`
-
-- [ ] **Step 1: Create ModelClient.java**
+Required public methods:
 
 ```java
-package com.github.loong;
+void showWelcome();
+void printSetupError();
+String readInput(String prompt);
+void printToken(String token);
+void printInfo(String msg);
+void printError(String msg);
+void printWarning(String msg);
+void println();
+void close();
+```
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.sse.EventSource;
-import okhttp3.sse.EventSourceListener;
-import okhttp3.sse.EventSources;
+- [ ] **Step 4: Keep display width helpers package-private where tests need access**
+
+Helpers such as `renderWelcomeLines`、`renderSetupErrorLines`、`padVisibleRight`、`visibleWidth`、`stripAnsi` can remain package-private/static so `ConsoleUITest` can verify layout behavior.
+
+---
+
+### Task 5: Implement LLmClient abstraction and DeepSeek client
+
+**Files:**
+- Create/modify: `src/main/java/com/github/loong/model/LLmClient.java`
+- Create/modify: `src/main/java/com/github/loong/model/DeepSeekClient.java`
+
+- [ ] **Step 1: Define LLmClient interface**
+
+```java
+package com.github.loong.model;
+
+import com.github.loong.message.Message;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-public class ModelClient {
+public interface LLmClient extends AutoCloseable {
+    void chat(List<Message> messages,
+              Consumer<String> onToken,
+              Consumer<String> onError) throws Exception;
 
-    private static final MediaType JSON = MediaType.parse("application/json");
+    void cancel();
+}
+```
 
-    private final ConfigManager config;
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
-    private volatile EventSource activeEventSource;
+- [ ] **Step 2: Implement DeepSeekClient**
 
-    public ModelClient(ConfigManager config) {
+`DeepSeekClient` constructor accepts `LlmConfig`:
+
+```java
+public class DeepSeekClient implements LLmClient {
+    public DeepSeekClient(LlmConfig config) { ... }
+}
+```
+
+It should:
+
+- validate `config.getApiKey()` before making a request;
+- convert each `Message` with `message.toMap()`;
+- POST to `config.getBaseUrl() + "/v1/chat/completions"`;
+- send `model`, `messages`, and `stream=true` in the JSON body;
+- stream SSE chunks and pass `choices[0].delta.content` to `onToken`;
+- pass connection/API failures to `onError`;
+- support `cancel()` by cancelling the active `EventSource`;
+- implement `close()` by cancelling and shutting down OkHttp resources.
+
+- [ ] **Step 3: Keep model-specific protocol details inside DeepSeekClient**
+
+`Main` and `ConsoleUI` should only depend on `LLmClient`, not on DeepSeek SSE details.
+
+---
+
+### Task 6: Implement LLmClientFactoryBuilder
+
+**Files:**
+- Create/modify: `src/main/java/com/github/loong/model/LLmClientFactoryBuilder.java`
+
+- [ ] **Step 1: Build clients from LlmConfig**
+
+```java
+package com.github.loong.model;
+
+import com.github.loong.config.LlmConfig;
+
+public class LLmClientFactoryBuilder {
+    private final LlmConfig config;
+
+    private LLmClientFactoryBuilder(LlmConfig config) {
         this.config = config;
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.MINUTES)
-                .build();
-        this.objectMapper = new ObjectMapper();
     }
 
-    public void chat(List<Map<String, String>> messages,
-                     Consumer<String> onToken,
-                     Consumer<String> onError) throws Exception {
-
-        String apiKey = config.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("DEEPSEEK_API_KEY environment variable is not set");
-        }
-
-        Map<String, Object> body = Map.of(
-                "model", config.getModelName(),
-                "messages", messages,
-                "stream", true
-        );
-
-        String jsonBody = objectMapper.writeValueAsString(body);
-
-        Request request = new Request.Builder()
-                .url(config.getBaseUrl() + "/v1/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .post(RequestBody.create(jsonBody, JSON))
-                .build();
-
-        CountDownLatch latch = new CountDownLatch(1);
-
-        EventSourceListener listener = new EventSourceListener() {
-            @Override
-            public void onEvent(EventSource eventSource, String id, String type, String data) {
-                if ("[DONE]".equals(data.trim())) {
-                    latch.countDown();
-                    return;
-                }
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> chunk = objectMapper.readValue(data, Map.class);
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> choices = (List<Map<String, Object>>) chunk.get("choices");
-                    if (choices != null && !choices.isEmpty()) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> delta = (Map<String, Object>) choices.get(0).get("delta");
-                        if (delta != null) {
-                            Object content = delta.get("content");
-                            if (content != null) {
-                                onToken.accept(content.toString());
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // skip malformed chunks
-                }
-            }
-
-            @Override
-            public void onFailure(EventSource eventSource, Throwable t, Response response) {
-                if (t != null) {
-                    onError.accept(t.getMessage());
-                } else if (response != null) {
-                    onError.accept("HTTP " + response.code() + " " + response.message());
-                }
-                latch.countDown();
-            }
-
-            @Override
-            public void onClosed(EventSource eventSource) {
-                latch.countDown();
-            }
-        };
-
-        EventSource.Factory factory = EventSources.createFactory(httpClient);
-        activeEventSource = factory.newEventSource(request, listener);
-        latch.await();
+    public static LLmClientFactoryBuilder fromConfig(LlmConfig config) {
+        return new LLmClientFactoryBuilder(config);
     }
 
-    public void cancel() {
-        if (activeEventSource != null) {
-            activeEventSource.cancel();
-        }
+    public LLmClient build() {
+        return new DeepSeekClient(config);
     }
 }
 ```
 
-- [ ] **Step 2: Verify compilation**
+- [ ] **Step 2: Preserve interface return type**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn compile
-```
+Callers should receive `LLmClient`, not `DeepSeekClient`, so the app can add other providers later without changing `Main`.
 
-Expected: BUILD SUCCESS
+- [ ] **Step 3: Future provider extension point**
 
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/main/java/com/github/loong/ModelClient.java
-git commit -m "feat: add ModelClient with SSE streaming via OkHttp"
-```
+When multiple providers are introduced, add provider selection to `LlmConfig` and dispatch inside `build()` or replace the hard-coded construction with a registry of provider factories.
 
 ---
 
-### Task 5: Implement Main entry point and interaction loop
+### Task 7: Implement Main entry point and interaction loop
 
 **Files:**
 - Modify: `src/main/java/com/github/loong/Main.java`
 
-- [ ] **Step 1: Replace Main.java**
+- [ ] **Step 1: Initialize config, UI, and client**
 
-Replace the entire content of `src/main/java/com/github/loong/Main.java` with:
+`Main` should use current types:
 
 ```java
-package com.github.loong;
+LlmConfig config = new LlmConfig();
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+try (ConsoleUI ui = new ConsoleUI(config)) {
+    ui.showWelcome();
 
-public class Main {
-
-    public static void main(String[] args) {
-        ConfigManager config = new ConfigManager();
-
-        if (config.getApiKey() == null || config.getApiKey().isBlank()) {
-            System.err.println("Error: DEEPSEEK_API_KEY environment variable is not set.");
-            System.err.println("Please set it with: export DEEPSEEK_API_KEY=your-key");
-            System.exit(1);
-        }
-
-        try (ConsoleUI ui = new ConsoleUI(config)) {
-            ModelClient client = new ModelClient(config);
-
-            ui.showWelcome();
-
-            List<Map<String, String>> messages = new ArrayList<>();
-
-            while (true) {
-                String input = ui.readInput("> ");
-
-                if (input == null) {
-                    break; // Ctrl+D
-                }
-
-                input = input.trim();
-
-                if (input.isEmpty()) {
-                    continue;
-                }
-
-                if ("/exit".equals(input) || "/quit".equals(input)) {
-                    ui.printInfo("Goodbye!");
-                    break;
-                }
-
-                if ("/help".equals(input)) {
-                    ui.printInfo("Commands:");
-                    ui.printInfo("  /exit, /quit  - Exit the CLI");
-                    ui.printInfo("  /help         - Show this help");
-                    ui.printInfo("  Ctrl+D        - Exit the CLI");
-                    continue;
-                }
-
-                Map<String, String> userMsg = new HashMap<>();
-                userMsg.put("role", "user");
-                userMsg.put("content", input);
-                messages.add(userMsg);
-
-                StringBuilder response = new StringBuilder();
-
-                ui.printInfo(""); // newline before response
-                try {
-                    client.chat(messages, token -> {
-                        response.append(token);
-                        ui.printToken(token);
-                    }, error -> {
-                        ui.printError(error);
-                    });
-
-                    String fullResponse = response.toString();
-                    if (!fullResponse.isEmpty()) {
-                        Map<String, String> assistantMsg = new HashMap<>();
-                        assistantMsg.put("role", "assistant");
-                        assistantMsg.put("content", fullResponse);
-                        messages.add(assistantMsg);
-                    } else {
-                        // remove the user message if we couldn't get a response
-                        messages.remove(messages.size() - 1);
-                    }
-
-                    ui.println();
-                } catch (Exception e) {
-                    ui.printError(e.getMessage());
-                    messages.remove(messages.size() - 1); // remove failed user msg
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to initialize CLI: " + e.getMessage());
-            System.exit(1);
-        }
+    if (!config.hasApiKey()) {
+        ui.printSetupError();
+        return 1;
     }
+
+    try (LLmClient client = LLmClientFactoryBuilder.fromConfig(config).build()) {
+        runChatLoop(ui, client);
+    }
+
+    return 0;
 }
 ```
 
-- [ ] **Step 2: Verify compilation**
+- [ ] **Step 2: Keep conversation history as Message objects**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn compile
+```java
+List<Message> messages = new ArrayList<>();
 ```
 
-Expected: BUILD SUCCESS
+For each user turn:
 
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/main/java/com/github/loong/Main.java
-git commit -m "feat: implement Main interaction loop with conversation history"
+```java
+UserMessage userMsg = new UserMessage(input);
+messages.add(userMsg);
 ```
+
+After a non-empty streamed response:
+
+```java
+AssistantMessage assistantMsg = new AssistantMessage(fullResponse);
+messages.add(assistantMsg);
+```
+
+- [ ] **Step 3: Stream output through UI**
+
+`client.chat(...)` should append streamed tokens to a `StringBuilder` and call `ui.printToken(token)` for immediate terminal output.
+
+- [ ] **Step 4: Remove failed user turns**
+
+If the model returns no content or throws, remove the latest user message so failed requests do not pollute conversation history.
+
+- [ ] **Step 5: Support built-in commands**
+
+Supported commands:
+
+- `/exit`
+- `/quit`
+- `/help`
+- `Ctrl+D` to exit
 
 ---
 
-### Task 6: Build fat-jar and verify end-to-end
+### Task 8: Add tests and verify end-to-end
 
-**Files:** None
+**Files:**
+- Create/modify: `src/test/java/com/github/loong/model/LLmClientBuilderTest.java`
+- Create/modify: `src/test/java/com/github/loong/ui/ConsoleUITest.java`
 
-- [ ] **Step 1: Package the fat-jar**
+- [ ] **Step 1: Test client factory construction**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn package -DskipTests
+`LLmClientBuilderTest` should verify:
+
+```java
+LLmClient client = LLmClientFactoryBuilder.fromConfig(new LlmConfig()).build();
+try {
+    assertNotNull(client);
+} finally {
+    client.close();
+}
 ```
 
-Expected: BUILD SUCCESS, produces `target/smile_cli-1.0-SNAPSHOT.jar`
+Because `LLmClient` extends `AutoCloseable`, the test method must either declare `throws Exception` or catch the checked exception from `client.close()`.
 
-- [ ] **Step 2: Verify JAR is runnable (no API key)**
+- [ ] **Step 2: Test ConsoleUI rendering helpers**
 
-```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && java -jar target/smile_cli-1.0-SNAPSHOT.jar
-```
+`ConsoleUITest` should cover width normalization, ANSI stripping, wide character width, truncation, and setup/welcome card rendering.
 
-Expected: Error message about missing DEEPSEEK_API_KEY, then exits.
-
-- [ ] **Step 3: Verify maven test still passes**
+- [ ] **Step 3: Verify compilation**
 
 ```bash
-cd /Users/garen/Code/java/smile_cli/smile_cli && mvn test
+mvn compile
 ```
 
-Expected: BUILD SUCCESS, tests pass.
+Expected: `BUILD SUCCESS`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify tests**
 
 ```bash
-git add -A
-git commit -m "chore: verify fat-jar build and tests pass"
+mvn test
 ```
+
+Expected: `BUILD SUCCESS`, tests pass.
+
+- [ ] **Step 5: Build executable JAR**
+
+```bash
+mvn package -DskipTests
+```
+
+Expected: produces `target/smile_cli-1.0-SNAPSHOT.jar`.
+
+- [ ] **Step 6: Verify no API key setup path**
+
+```bash
+java -jar target/smile_cli-1.0-SNAPSHOT.jar
+```
+
+Expected without `DEEPSEEK_API_KEY`: rendered setup guidance and exit code `1`.

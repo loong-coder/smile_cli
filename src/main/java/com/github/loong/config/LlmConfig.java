@@ -1,4 +1,4 @@
-package com.github.loong;
+package com.github.loong.config;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
-public class ConfigManager {
+public class LlmConfig {
 
     private final Properties props;
 
@@ -15,7 +15,7 @@ public class ConfigManager {
     private static final String DEFAULT_DISPLAY_VERSION = "deepseek v4 pro";
     private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
 
-    public ConfigManager() {
+    public LlmConfig() {
         this.props = new Properties();
         props.setProperty("model.name", DEFAULT_MODEL_NAME);
         props.setProperty("model.displayVersion", DEFAULT_DISPLAY_VERSION);
