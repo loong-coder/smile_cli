@@ -1,6 +1,6 @@
 package com.github.loong.chat;
 
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import junit.framework.TestCase;
 
 import java.util.List;

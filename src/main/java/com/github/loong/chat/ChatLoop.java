@@ -5,7 +5,7 @@ import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
 import com.github.loong.message.ToolMessage;
 import com.github.loong.message.UserMessage;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import com.github.loong.ui.TerminalManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +26,7 @@ public class ChatLoop {
         TerminalManager ui = context.terminalManager();
         List<Message> messages = context.messages();
 
+        label:
         while (true) {
             String input = ui.readInput("> ");
 
@@ -35,32 +36,26 @@ public class ChatLoop {
 
             input = input.trim();
 
-            if (input.isEmpty()) {
-                continue;
-            }
-
-            if ("/exit".equals(input) || "/quit".equals(input)) {
-                ui.printInfo("Goodbye!");
-                break;
-            }
-
-            if ("/help".equals(input)) {
-                for (String line : renderHelpLines()) {
-                    ui.printInfo(line);
-                }
-                continue;
-            }
-
-            if ("/clear".equals(input)) {
-                ui.clearScreen();
-                continue;
-            }
-
-            if ("/tools".equals(input)) {
-                for (String line : renderTools(context.toolDefinitions())) {
-                    ui.printInfo(line);
-                }
-                continue;
+            switch (input) {
+                case "":
+                    continue;
+                case "/exit":
+                case "/quit":
+                    ui.printInfo("Goodbye!");
+                    break label;
+                case "/help":
+                    for (String line : renderHelpLines()) {
+                        ui.printInfo(line);
+                    }
+                    continue;
+                case "/clear":
+                    ui.clearScreen();
+                    continue;
+                case "/tools":
+                    for (String line : renderTools(context.toolDefinitions())) {
+                        ui.printInfo(line);
+                    }
+                    continue;
             }
 
             UserMessage userMsg = new UserMessage(input);

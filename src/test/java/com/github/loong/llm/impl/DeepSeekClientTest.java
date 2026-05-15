@@ -4,7 +4,7 @@ import com.github.loong.llm.ChatResult;
 import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
 import com.github.loong.message.UserMessage;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import junit.framework.TestCase;
 
 import java.util.List;

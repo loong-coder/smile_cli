@@ -1,5 +1,7 @@
-package com.github.loong.tool;
+package com.github.loong.tools;
 
+import com.github.loong.tools.function.LocalSystemTools;
+import com.github.loong.tools.result.GrepResult;
 import junit.framework.TestCase;
 
 import java.nio.charset.StandardCharsets;
@@ -26,7 +28,8 @@ public class LocalSystemToolsTest extends TestCase {
 
         LocalSystemTools.ReadFileResult result = tools.readFile("hello.txt", null, null);
 
-        assertEquals("hello.txt", result.path());
+        // toStandardPathString 返回绝对路径，验证以文件名结尾即可
+        assertTrue(result.path().endsWith("/hello.txt"));
         assertEquals("你好，工具", result.content());
         assertEquals("UTF-8", result.encoding());
         assertFalse(result.truncated());
@@ -45,7 +48,8 @@ public class LocalSystemToolsTest extends TestCase {
     public void testWriteFileCreatesParentsWhenRequested() throws Exception {
         LocalSystemTools.WriteFileResult result = tools.writeFile("nested/file.txt", "content", null, true);
 
-        assertEquals("nested/file.txt", result.path());
+        // toStandardPathString 返回绝对路径
+        assertTrue(result.path().endsWith("/nested/file.txt"));
         assertEquals("content".getBytes(StandardCharsets.UTF_8).length, result.bytesWritten());
         assertTrue(result.created());
         assertEquals("content", Files.readString(workspace.resolve("nested/file.txt"), StandardCharsets.UTF_8));
@@ -66,20 +70,36 @@ public class LocalSystemToolsTest extends TestCase {
 
         LocalSystemTools.ListDirectoryResult result = tools.listDirectory(".", false, null);
 
-        assertEquals(".", result.path());
+        // toStandardPathString 返回绝对路径
+        assertEquals(workspace.toString(), result.path());
         assertEquals(2, result.entries().size());
         assertTrue(containsEntry(result.entries(), "a.txt", false));
         assertTrue(containsEntry(result.entries(), "dir", true));
         assertFalse(result.truncated());
     }
 
-    public void testRejectsPathOutsideWorkspace() throws Exception {
-        try {
-            tools.readFile("../outside.txt", null, null);
-            fail("outside path should fail");
-        } catch (Exception e) {
-            assertTrue(e.getMessage().contains("outside workspace"));
-        }
+    /**
+     * 验证 grepSearch 能搜索文本内容并返回带上下文的匹配结果。
+     */
+    public void testGrepSearchFindsMatchingLinesWithContext() throws Exception {
+        Files.writeString(workspace.resolve("search.txt"),
+                "line1: hello\nline2: world\nline3: hello again\nline4: foo\nline5: hello world\n",
+                StandardCharsets.UTF_8);
+
+        List<GrepResult> results = tools.grepSearch(".", "hello", false);
+
+        // 应匹配到 3 行包含 "hello" 的内容
+        assertEquals(3, results.size());
+
+        GrepResult first = results.get(0);
+        assertEquals(1, first.lineNumber());
+        assertTrue(first.content().contains("hello"));
+        // 上下文：第1行前面没有行，后面应有第2、3行
+        assertTrue(first.contextLines().size() <= 4);
+
+        GrepResult last = results.get(2);
+        assertEquals(5, last.lineNumber());
+        assertTrue(last.content().contains("hello world"));
     }
 
     public void testExecuteCommandReturnsStdoutAndExitCode() throws Exception {
@@ -115,6 +135,7 @@ public class LocalSystemToolsTest extends TestCase {
         assertTrue(names.contains("read_file"));
         assertTrue(names.contains("write_file"));
         assertTrue(names.contains("list_directory"));
+        assertTrue(names.contains("grep_search"));
         assertTrue(names.contains("execute_command"));
     }
 

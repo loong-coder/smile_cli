@@ -1,9 +1,9 @@
-package com.github.loong.tool.util;
+package com.github.loong.tools.util;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import com.github.victools.jsonschema.generator.Option;
 import com.github.victools.jsonschema.generator.OptionPreset;
 import com.github.victools.jsonschema.generator.SchemaGenerator;

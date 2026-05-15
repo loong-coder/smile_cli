@@ -2,8 +2,8 @@ package com.github.loong.chat;
 
 import com.github.loong.llm.LLmClient;
 import com.github.loong.message.Message;
-import com.github.loong.tool.ToolCallExecutor;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.executor.ToolCallExecutor;
+import com.github.loong.tools.ToolDefinition;
 import com.github.loong.ui.TerminalManager;
 
 import java.util.List;

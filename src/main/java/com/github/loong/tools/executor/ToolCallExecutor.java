@@ -1,8 +1,10 @@
-package com.github.loong.tool;
+package com.github.loong.tools.executor;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.loong.message.AssistantMessage;
+import com.github.loong.tools.ToolRegistry;
+import com.github.loong.tools.exception.WorkspaceConstraintException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +38,15 @@ public class ToolCallExecutor {
 
     /**
      * 工具调用失败时返回错误 JSON，避免单次工具异常中断后续对话。
+     * 工作区越界不视为系统错误，返回带有状态标识的结果供调用方识别。
      */
     public String execute(AssistantMessage.ToolCall call) {
         try {
             return executeOrThrow(call);
+        } catch (WorkspaceConstraintException e) {
+            // 工作区越界是预期内约束，WARN 级别即可，返回结构化状态让调用方知道越界
+            LOGGER.warn("{}", failureLogMessage(call, e));
+            return outOfBoundsJson(e);
         } catch (Exception e) {
             LOGGER.error("{}", failureLogMessage(call, e), e);
             return errorJson(e);
@@ -68,7 +75,7 @@ public class ToolCallExecutor {
         });
     }
 
-    static String failureLogMessage(AssistantMessage.ToolCall call, Exception e) {
+    public static String failureLogMessage(AssistantMessage.ToolCall call, Exception e) {
         String errorType = e.getClass().getName();
         String errorMessage = e.getMessage() == null ? "" : e.getMessage();
         if (call == null) {
@@ -93,6 +100,23 @@ public class ToolCallExecutor {
 
     private static String nullSafe(String value) {
         return value == null ? "<null>" : value;
+    }
+
+    /**
+     * 工作区越界时返回带状态标识的 JSON，与普通 error 区分，
+     * 调用方可据此判断是越界而非系统故障。
+     */
+    private String outOfBoundsJson(WorkspaceConstraintException e) {
+        String message = e.getMessage() == null ? "" : e.getMessage();
+        String path = e.requestedPath() == null ? "" : e.requestedPath();
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "status", "path_outside_workspace",
+                    "path", path,
+                    "message", message));
+        } catch (Exception ignored) {
+            return "{\"status\":\"path_outside_workspace\"}";
+        }
     }
 
     private String errorJson(Exception e) {

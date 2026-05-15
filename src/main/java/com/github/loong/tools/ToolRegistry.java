@@ -1,6 +1,9 @@
-package com.github.loong.tool;
+package com.github.loong.tools;
 
-import com.github.loong.tool.util.SwaggerToolDescriptionParser;
+
+import com.github.loong.tools.executor.ReflectiveToolExecutor;
+import com.github.loong.tools.executor.ToolExecutor;
+import com.github.loong.tools.util.SwaggerToolDescriptionParser;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -69,7 +72,7 @@ public class ToolRegistry {
         return List.copyOf(definitions);
     }
 
-    ToolExecutor executor(String name) {
+    public ToolExecutor executor(String name) {
         RegisteredTool tool = tools.get(name);
         if (tool == null) {
             return null;

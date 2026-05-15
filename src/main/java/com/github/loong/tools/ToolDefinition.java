@@ -1,4 +1,4 @@
-package com.github.loong.tool;
+package com.github.loong.tools;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

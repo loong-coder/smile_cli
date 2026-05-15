@@ -1,7 +1,7 @@
 package com.github.loong.llm;
 
 import com.github.loong.message.Message;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 
 import java.util.List;
 import java.util.function.Consumer;

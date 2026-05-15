@@ -1,6 +1,6 @@
-package com.github.loong.tool.util;
+package com.github.loong.tools.util;
 
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import junit.framework.TestCase;
 

@@ -1,4 +1,4 @@
-package com.github.loong.tool;
+package com.github.loong.tools.executor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.TypeFactory;
@@ -13,7 +13,7 @@ import java.lang.reflect.Type;
 import java.util.Map;
 
 // 将 Java 方法适配为工具执行器，避免注册表直接承载工具调用细节。
-class ReflectiveToolExecutor implements ToolExecutor {
+public class ReflectiveToolExecutor implements ToolExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReflectiveToolExecutor.class);
 
@@ -21,7 +21,7 @@ class ReflectiveToolExecutor implements ToolExecutor {
     private final Method method;
     private final ObjectMapper objectMapper;
 
-    ReflectiveToolExecutor(Object target, Method method) {
+    public ReflectiveToolExecutor(Object target, Method method) {
         if (target == null) {
             throw new IllegalArgumentException("target cannot be null");
         }

@@ -6,7 +6,7 @@ import com.github.loong.llm.ChatResult;
 import com.github.loong.llm.LLmClient;
 import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
-import com.github.loong.tool.ToolDefinition;
+import com.github.loong.tools.ToolDefinition;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
