@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-public class ConsoleUI implements AutoCloseable {
+public class TerminalManager implements AutoCloseable {
 
     private static final String ANSI_RESET = "\033[0m";
     private static final String ANSI_CYAN = "\033[36m";
@@ -38,7 +38,7 @@ public class ConsoleUI implements AutoCloseable {
     private final LineReader reader;
     private final LlmConfig config;
 
-    public ConsoleUI(LlmConfig config) throws IOException {
+    public TerminalManager(LlmConfig config) throws IOException {
         this.config = config;
         this.terminal = TerminalBuilder.builder()
                 .system(true)
@@ -132,7 +132,7 @@ public class ConsoleUI implements AutoCloseable {
         if (terminalWidth <= 0) {
             return 128;
         }
-        return Math.max(72, Math.min(213, terminalWidth - 1));
+        return Math.clamp(terminalWidth - 1, 72, 213);
     }
 
     private static String workspacePath() {

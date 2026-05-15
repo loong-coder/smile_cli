@@ -25,6 +25,6 @@ Source layout:
 - `src/main/java/com/github/loong/` — application code
 - `src/test/java/com/github/loong/` — tests (JUnit 3.8.1, extending `TestCase`)
 
-## OpenSpec
+## Coding Constraints
 
-This project uses OpenSpec for spec-driven development. Slash commands are available under `/opsx:` (explore, new, continue, apply, ff, sync, archive, bulk-archive, verify, onboard). Configuration is in `openspec/config.yaml`.
+- 新增或修改代码时，必须编写代码中文注释。

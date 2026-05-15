@@ -2,8 +2,11 @@ package com.github.loong.llm.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.loong.config.LlmConfig;
+import com.github.loong.llm.ChatResult;
 import com.github.loong.llm.LLmClient;
+import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
+import com.github.loong.tool.ToolDefinition;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -14,6 +17,7 @@ import okhttp3.sse.EventSourceListener;
 import okhttp3.sse.EventSources;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -39,26 +43,17 @@ public class DeepSeekClient implements LLmClient {
     }
 
     @Override
-    public void chat(List<Message> messages,
-                     Consumer<String> onToken,
-                     Consumer<String> onError) throws Exception {
+    public ChatResult chat(List<Message> messages,
+                           List<ToolDefinition> tools,
+                           Consumer<String> onToken,
+                           Consumer<String> onError) throws Exception {
 
         String apiKey = config.getApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("DEEPSEEK_API_KEY environment variable is not set");
         }
 
-        List<Map<String, Object>> msgMaps = new ArrayList<>();
-        for (Message msg : messages) {
-            msgMaps.add(msg.toMap());
-        }
-
-        Map<String, Object> body = Map.of(
-                "model", config.getModelName(),
-                "messages", msgMaps,
-                "stream", true
-        );
-
+        Map<String, Object> body = buildRequestBody(config.getModelName(), messages, tools);
         String jsonBody = objectMapper.writeValueAsString(body);
 
         Request request = new Request.Builder()
@@ -69,6 +64,7 @@ public class DeepSeekClient implements LLmClient {
                 .build();
 
         CountDownLatch latch = new CountDownLatch(1);
+        StreamAccumulator accumulator = new StreamAccumulator();
 
         EventSourceListener listener = new EventSourceListener() {
             @Override
@@ -78,19 +74,9 @@ public class DeepSeekClient implements LLmClient {
                     return;
                 }
                 try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> chunk = objectMapper.readValue(data, Map.class);
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> choices = (List<Map<String, Object>>) chunk.get("choices");
-                    if (choices != null && !choices.isEmpty()) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> delta = (Map<String, Object>) choices.get(0).get("delta");
-                        if (delta != null) {
-                            Object content = delta.get("content");
-                            if (content != null) {
-                                onToken.accept(content.toString());
-                            }
-                        }
+                    String token = accumulator.accept(data);
+                    if (token != null && !token.isEmpty()) {
+                        onToken.accept(token);
                     }
                 } catch (Exception e) {
                     System.err.println("Warning: failed to parse SSE chunk: " + e.getMessage());
@@ -124,6 +110,49 @@ public class DeepSeekClient implements LLmClient {
         } finally {
             activeEventSource.cancel();
         }
+        return accumulator.result();
+    }
+
+    static Map<String, Object> buildRequestBody(String model, List<Message> messages, List<ToolDefinition> tools) {
+        List<Map<String, Object>> msgMaps = new ArrayList<>();
+        for (Message msg : messages) {
+            msgMaps.add(msg.toMap());
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("messages", msgMaps);
+        body.put("stream", true);
+
+        if (tools != null && !tools.isEmpty()) {
+            List<Map<String, Object>> toolMaps = new ArrayList<>();
+            for (ToolDefinition tool : tools) {
+                toolMaps.add(toDeepSeekToolMap(tool));
+            }
+            body.put("tools", toolMaps);
+            body.put("tool_choice", "auto");
+        }
+        return body;
+    }
+
+    static Map<String, Object> toDeepSeekToolMap(ToolDefinition tool) {
+        Map<String, Object> function = new LinkedHashMap<>();
+        function.put("name", tool.name());
+        function.put("description", tool.description());
+        function.put("parameters", tool.inputSchema());
+
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "function");
+        map.put("function", function);
+        return map;
+    }
+
+    static ChatResult parseChunks(List<String> chunks) throws Exception {
+        StreamAccumulator accumulator = new StreamAccumulator();
+        for (String chunk : chunks) {
+            accumulator.accept(chunk);
+        }
+        return accumulator.result();
     }
 
     @Override
@@ -138,5 +167,90 @@ public class DeepSeekClient implements LLmClient {
         cancel();
         httpClient.dispatcher().executorService().shutdown();
         httpClient.connectionPool().evictAll();
+    }
+
+    private static class StreamAccumulator {
+
+        private final ObjectMapper objectMapper = new ObjectMapper();
+        private final StringBuilder content = new StringBuilder();
+        private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
+        private String finishReason;
+
+        String accept(String data) throws Exception {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> chunk = objectMapper.readValue(data, Map.class);
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) chunk.get("choices");
+            if (choices == null || choices.isEmpty()) {
+                return null;
+            }
+
+            Map<String, Object> choice = choices.get(0);
+            Object finishReasonValue = choice.get("finish_reason");
+            if (finishReasonValue != null) {
+                finishReason = finishReasonValue.toString();
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> delta = (Map<String, Object>) choice.get("delta");
+            if (delta == null) {
+                return null;
+            }
+
+            String token = null;
+            Object contentValue = delta.get("content");
+            if (contentValue != null) {
+                token = contentValue.toString();
+                content.append(token);
+            }
+            collectToolCalls(delta);
+            return token;
+        }
+
+        private void collectToolCalls(Map<String, Object> delta) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> calls = (List<Map<String, Object>>) delta.get("tool_calls");
+            if (calls == null) {
+                return;
+            }
+
+            for (Map<String, Object> call : calls) {
+                int index = ((Number) call.getOrDefault("index", 0)).intValue();
+                ToolCallBuilder builder = toolCalls.computeIfAbsent(index, ignored -> new ToolCallBuilder());
+
+                Object id = call.get("id");
+                if (id != null) {
+                    builder.id = id.toString();
+                }
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> function = (Map<String, Object>) call.get("function");
+                if (function != null) {
+                    Object name = function.get("name");
+                    if (name != null) {
+                        builder.name = name.toString();
+                    }
+                    Object arguments = function.get("arguments");
+                    if (arguments != null) {
+                        builder.arguments.append(arguments);
+                    }
+                }
+            }
+        }
+
+        ChatResult result() {
+            List<AssistantMessage.ToolCall> calls = new ArrayList<>();
+            for (ToolCallBuilder builder : toolCalls.values()) {
+                calls.add(new AssistantMessage.ToolCall(builder.id, builder.name, builder.arguments.toString()));
+            }
+            return new ChatResult(content.toString(), calls, finishReason);
+        }
+    }
+
+    private static class ToolCallBuilder {
+
+        private String id;
+        private String name;
+        private final StringBuilder arguments = new StringBuilder();
     }
 }

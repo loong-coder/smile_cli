@@ -11,7 +11,7 @@
 - `com.github.loong.llm.LLmClient`：模型客户端接口，负责流式对话、取消与关闭资源。
 - `com.github.loong.llm.impl.DeepSeekClient`：基于 OkHttp SSE 调用 DeepSeek OpenAI-compatible chat completions API。
 - `com.github.loong.llm.LLmClientFactoryBuilder`：从 `LlmConfig` 构建 `LLmClient`，当前返回 `DeepSeekClient`。
-- `com.github.loong.ui.ConsoleUI`：JLine 终端输入、命令补全、欢迎页、错误页和彩色输出。
+- `com.github.loong.ui.TerminalManager`：JLine 终端输入、命令补全、欢迎页、错误页和彩色输出。
 - `com.github.loong.Main`：初始化配置/UI/client，维护 `List<Message>` 对话历史并驱动交互循环。
 
 **Type sync notes:**
