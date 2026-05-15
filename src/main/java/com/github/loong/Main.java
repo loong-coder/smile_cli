@@ -4,8 +4,8 @@ import com.github.loong.config.LlmConfig;
 import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
 import com.github.loong.message.UserMessage;
-import com.github.loong.model.LLmClient;
-import com.github.loong.model.LLmClientFactoryBuilder;
+import com.github.loong.llm.LLmClient;
+import com.github.loong.llm.LLmClientFactoryBuilder;
 import com.github.loong.ui.ConsoleUI;
 
 import java.util.ArrayList;

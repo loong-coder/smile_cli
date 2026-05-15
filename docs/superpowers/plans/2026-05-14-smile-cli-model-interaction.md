@@ -8,9 +8,9 @@
 
 - `com.github.loong.config.LlmConfig`：读取 `~/.smile_cli/config` 与 `DEEPSEEK_API_KEY`，提供模型名、展示版本、base URL、API key 状态。
 - `com.github.loong.message.Message` 及子类：用强类型消息替代 `Map<String, String>`，由 `toMap()` 转换为 API 请求体。
-- `com.github.loong.model.LLmClient`：模型客户端接口，负责流式对话、取消与关闭资源。
-- `com.github.loong.model.DeepSeekClient`：基于 OkHttp SSE 调用 DeepSeek OpenAI-compatible chat completions API。
-- `com.github.loong.model.LLmClientFactoryBuilder`：从 `LlmConfig` 构建 `LLmClient`，当前返回 `DeepSeekClient`。
+- `com.github.loong.llm.LLmClient`：模型客户端接口，负责流式对话、取消与关闭资源。
+- `com.github.loong.llm.impl.DeepSeekClient`：基于 OkHttp SSE 调用 DeepSeek OpenAI-compatible chat completions API。
+- `com.github.loong.llm.LLmClientFactoryBuilder`：从 `LlmConfig` 构建 `LLmClient`，当前返回 `DeepSeekClient`。
 - `com.github.loong.ui.ConsoleUI`：JLine 终端输入、命令补全、欢迎页、错误页和彩色输出。
 - `com.github.loong.Main`：初始化配置/UI/client，维护 `List<Message>` 对话历史并驱动交互循环。
 
@@ -236,7 +236,7 @@ Helpers such as `renderWelcomeLines`、`renderSetupErrorLines`、`padVisibleRigh
 - [ ] **Step 1: Define LLmClient interface**
 
 ```java
-package com.github.loong.model;
+package com.github.loong.llm;
 
 import com.github.loong.message.Message;
 
@@ -287,9 +287,10 @@ It should:
 - [ ] **Step 1: Build clients from LlmConfig**
 
 ```java
-package com.github.loong.model;
+package com.github.loong.llm;
 
 import com.github.loong.config.LlmConfig;
+import com.github.loong.llm.impl.DeepSeekClient;
 
 public class LLmClientFactoryBuilder {
     private final LlmConfig config;

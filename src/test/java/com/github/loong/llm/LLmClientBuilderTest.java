@@ -1,4 +1,4 @@
-package com.github.loong.model;
+package com.github.loong.llm;
 
 import com.github.loong.config.LlmConfig;
 import junit.framework.TestCase;
