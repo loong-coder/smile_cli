@@ -43,6 +43,6 @@ public record ChatResult(String content,
      * @return {@code true} 如果工具调用列表非空
      */
     public boolean hasToolCalls() {
-        return !toolCalls.isEmpty();
+        return toolCalls != null && !toolCalls.isEmpty();
     }
 }

@@ -10,13 +10,15 @@ public interface LLmClient extends AutoCloseable {
 
     default void chat(List<Message> messages,
                       Consumer<String> onToken,
+                      Consumer<String> onReasoning,
                       Consumer<String> onError) throws Exception {
-        chat(messages, List.of(), onToken, onError);
+        chat(messages, List.of(), onToken, onReasoning, onError);
     }
 
     ChatResult chat(List<Message> messages,
                     List<ToolDefinition> tools,
                     Consumer<String> onToken,
+                    Consumer<String> onReasoning,
                     Consumer<String> onError) throws Exception;
 
     void cancel();

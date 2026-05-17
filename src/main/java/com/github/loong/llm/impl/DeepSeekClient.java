@@ -16,6 +16,7 @@ import okhttp3.ResponseBody;
 import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 import okhttp3.sse.EventSources;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class DeepSeekClient implements LLmClient {
@@ -50,6 +52,7 @@ public class DeepSeekClient implements LLmClient {
     public ChatResult chat(List<Message> messages,
                            List<ToolDefinition> tools,
                            Consumer<String> onToken,
+                           Consumer<String> onReasoning,
                            Consumer<String> onError) throws Exception {
 
         String apiKey = config.getApiKey();
@@ -68,20 +71,19 @@ public class DeepSeekClient implements LLmClient {
                 .build();
 
         CountDownLatch latch = new CountDownLatch(1);
+        // 标记流是否由客户端主动取消（正常流程），用于在 onFailure 中区分真正的连接异常
+        AtomicBoolean cancelledByUs = new AtomicBoolean(false);
         StreamAccumulator accumulator = new StreamAccumulator();
 
         EventSourceListener listener = new EventSourceListener() {
             @Override
-            public void onEvent(EventSource eventSource, String id, String type, String data) {
+            public void onEvent(@NotNull EventSource eventSource, String id, String type, String data) {
                 if ("[DONE]".equals(data.trim())) {
                     latch.countDown();
                     return;
                 }
                 try {
-                    String token = accumulator.accept(data);
-                    if (token != null && !token.isEmpty()) {
-                        onToken.accept(token);
-                    }
+                    accumulator.accept(data, onToken, onReasoning);
                 } catch (Exception e) {
                     LOGGER.error("Failed to parse DeepSeek SSE chunk", e);
                 }
@@ -89,6 +91,11 @@ public class DeepSeekClient implements LLmClient {
 
             @Override
             public void onFailure(EventSource eventSource, Throwable t, Response response) {
+                // 客户端主动取消（正常流程），非真正的连接异常，无需告警
+                if (cancelledByUs.get()) {
+                    latch.countDown();
+                    return;
+                }
                 if (t != null) {
                     LOGGER.error("DeepSeek stream connection failed", t);
                     onError.accept(t.getMessage());
@@ -116,6 +123,8 @@ public class DeepSeekClient implements LLmClient {
                 throw new RuntimeException("Chat stream timed out after 5 minutes");
             }
         } finally {
+            // 标记为客户端主动取消，避免 onFailure 中误报连接异常
+            cancelledByUs.set(true);
             activeEventSource.cancel();
         }
         return accumulator.result();
@@ -172,7 +181,7 @@ public class DeepSeekClient implements LLmClient {
     static ChatResult parseChunks(List<String> chunks) throws Exception {
         StreamAccumulator accumulator = new StreamAccumulator();
         for (String chunk : chunks) {
-            accumulator.accept(chunk);
+            accumulator.accept(chunk, null, null);
         }
         return accumulator.result();
     }
@@ -199,13 +208,13 @@ public class DeepSeekClient implements LLmClient {
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
         private String finishReason;
 
-        String accept(String data) throws Exception {
+        void accept(String data, Consumer<String> onToken, Consumer<String> onReasoning) throws Exception {
             @SuppressWarnings("unchecked")
             Map<String, Object> chunk = objectMapper.readValue(data, Map.class);
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> choices = (List<Map<String, Object>>) chunk.get("choices");
             if (choices == null || choices.isEmpty()) {
-                return null;
+                return;
             }
 
             Map<String, Object> choice = choices.get(0);
@@ -217,7 +226,7 @@ public class DeepSeekClient implements LLmClient {
             @SuppressWarnings("unchecked")
             Map<String, Object> delta = (Map<String, Object>) choice.get("delta");
             if (delta == null) {
-                return null;
+                return;
             }
 
             String token = null;
@@ -227,11 +236,19 @@ public class DeepSeekClient implements LLmClient {
                 content.append(token);
             }
             Object reasonContextValue = delta.get("reasoning_content");
+            String reasoning = null;
             if (reasonContextValue != null) {
+                reasoning = reasonContextValue.toString();
                 reasonContext.append(reasonContextValue);
             }
             collectToolCalls(delta);
-            return token;
+            if (reasoning != null && !reasoning.isEmpty() && onReasoning != null) {
+                onReasoning.accept(reasoning);
+            }
+            // 消费token
+            if (token != null && !token.isEmpty() && onToken != null) {
+                onToken.accept(token);
+            }
         }
 
         private void collectToolCalls(Map<String, Object> delta) {

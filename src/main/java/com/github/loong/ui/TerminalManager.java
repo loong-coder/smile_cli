@@ -24,6 +24,7 @@ public class TerminalManager implements AutoCloseable {
     private static final String ANSI_RED = "\033[31m";
     private static final String ANSI_BOLD = "\033[1m";
     private static final String ANSI_YELLOW = "\033[33m";
+    private static final String ANSI_GRAY = "\033[90m";
     private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[[;\\d]*[ -/]*[@-~]");
 
     static final String MASCOT_READY = "Yite [ready]";
@@ -88,6 +89,12 @@ public class TerminalManager implements AutoCloseable {
 
     public void printToken(String token) {
         terminal.writer().print(token);
+        terminal.writer().flush();
+    }
+
+    // 输出思考过程文本，使用灰色（比默认颜色更浅），用于区分思考过程与最终回复
+    public void printThinking(String token) {
+        terminal.writer().print(ANSI_GRAY + token + ANSI_RESET);
         terminal.writer().flush();
     }
 
