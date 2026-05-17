@@ -54,13 +54,38 @@ public class DeepSeekClient implements LLmClient {
                            Consumer<String> onToken,
                            Consumer<String> onReasoning,
                            Consumer<String> onError) throws Exception {
+        // 默认使用 text 格式（非结构化输出）
+        return doChat(messages, tools, onToken, onReasoning, onError, null);
+    }
+
+    @Override
+    public ChatResult chat(List<Message> messages,
+                           List<ToolDefinition> tools,
+                           Consumer<String> onToken,
+                           Consumer<String> onReasoning,
+                           Consumer<String> onError,
+                           String responseFormat) throws Exception {
+        return doChat(messages, tools, onToken, onReasoning, onError, responseFormat);
+    }
+
+    /**
+     * 实际执行 LLM 调用的内部方法。
+     *
+     * @param responseFormat 响应格式，"text"、"json_object" 或 null（不传该字段）
+     */
+    private ChatResult doChat(List<Message> messages,
+                              List<ToolDefinition> tools,
+                              Consumer<String> onToken,
+                              Consumer<String> onReasoning,
+                              Consumer<String> onError,
+                              String responseFormat) throws Exception {
 
         String apiKey = config.getApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("DEEPSEEK_API_KEY environment variable is not set");
         }
 
-        Map<String, Object> body = buildRequestBody(config.getModelName(), messages, tools);
+        Map<String, Object> body = buildRequestBody(config.getModelName(), messages, tools, responseFormat);
         String jsonBody = objectMapper.writeValueAsString(body);
 
         Request request = new Request.Builder()
@@ -144,7 +169,7 @@ public class DeepSeekClient implements LLmClient {
         }
     }
 
-    static Map<String, Object> buildRequestBody(String model, List<Message> messages, List<ToolDefinition> tools) {
+    static Map<String, Object> buildRequestBody(String model, List<Message> messages, List<ToolDefinition> tools, String responseFormat) {
         List<Map<String, Object>> msgMaps = new ArrayList<>();
         for (Message msg : messages) {
             msgMaps.add(msg.toMap());
@@ -154,6 +179,13 @@ public class DeepSeekClient implements LLmClient {
         body.put("model", model);
         body.put("messages", msgMaps);
         body.put("stream", true);
+
+        // 响应格式控制：为 null 时不传该字段（默认 text）
+        if (responseFormat != null && !responseFormat.isBlank()) {
+            Map<String, Object> format = new LinkedHashMap<>();
+            format.put("type", responseFormat);
+            body.put("response_format", format);
+        }
 
         if (tools != null && !tools.isEmpty()) {
             List<Map<String, Object>> toolMaps = new ArrayList<>();

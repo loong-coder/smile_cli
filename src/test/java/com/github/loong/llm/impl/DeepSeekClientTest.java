@@ -18,7 +18,7 @@ public class DeepSeekClientTest extends TestCase {
     public void testBuildRequestBodyWithoutTools() {
         List<Message> messages = List.of(new UserMessage("hello"));
 
-        Map<String, Object> body = DeepSeekClient.buildRequestBody("deepseek-chat", messages, List.of());
+        Map<String, Object> body = DeepSeekClient.buildRequestBody("deepseek-chat", messages, List.of(), null);
 
         assertEquals("deepseek-chat", body.get("model"));
         assertEquals(Boolean.TRUE, body.get("stream"));
@@ -38,7 +38,7 @@ public class DeepSeekClientTest extends TestCase {
         Map<String, Object> body = DeepSeekClient.buildRequestBody(
                 "deepseek-chat",
                 List.of(new UserMessage("weather")),
-                List.of(definition));
+                List.of(definition), null);
 
         assertEquals("auto", body.get("tool_choice"));
         @SuppressWarnings("unchecked")
@@ -74,5 +74,29 @@ public class DeepSeekClientTest extends TestCase {
         assertEquals("call_1", call.id());
         assertEquals("get_weather_data", call.name());
         assertEquals("{\"location\":\"Beijing\"}", call.argumentsJson());
+    }
+
+    /** 测试传入 responseFormat 时请求体包含 response_format 字段 */
+    public void testBuildRequestBodyWithJsonObjectFormat() {
+        Map<String, Object> body = DeepSeekClient.buildRequestBody(
+                "deepseek-chat",
+                List.of(new UserMessage("hello")),
+                List.of(), "json_object");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> format = (Map<String, Object>) body.get("response_format");
+        assertNotNull("传入 json_object 时应包含 response_format 字段", format);
+        assertEquals("json_object", format.get("type"));
+    }
+
+    /** 测试 responseFormat 为 null 时不包含 response_format 字段 */
+    public void testBuildRequestBodyDefaultTextFormat() {
+        Map<String, Object> body = DeepSeekClient.buildRequestBody(
+                "deepseek-chat",
+                List.of(new UserMessage("hello")),
+                List.of(), null);
+
+        assertFalse("responseFormat 为 null 时不应包含 response_format 字段",
+                body.containsKey("response_format"));
     }
 }

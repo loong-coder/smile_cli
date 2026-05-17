@@ -3,6 +3,7 @@ package com.github.loong.chat;
 import com.github.loong.agent.Agent;
 import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
+import com.github.loong.plan.PlanCommand;
 import com.github.loong.tools.ToolDefinition;
 import com.github.loong.ui.TerminalManager;
 import org.slf4j.Logger;
@@ -54,6 +55,19 @@ public class ChatLoop {
                         terminalManager.printInfo(line);
                     }
                     continue;
+                default:
+                    // /plan 命令需要处理带参数的情况
+                    if (input.startsWith("/plan")) {
+                        String taskDesc = input.substring("/plan".length()).trim();
+                        if (taskDesc.isEmpty()) {
+                            terminalManager.printWarning("请提供任务描述，例如: /plan 实现用户登录功能");
+                            continue;
+                        }
+                        terminalManager.println();
+                        new PlanCommand(context).execute(taskDesc);
+                        terminalManager.println();
+                        continue;
+                    }
             }
 
             terminalManager.println();
@@ -75,6 +89,7 @@ public class ChatLoop {
                 "  /exit, /quit  - Exit the CLI",
                 "  /help         - Show this help",
                 "  /tools        - Show installed tools",
+                "  /plan <desc>  - Generate task execution plan",
                 "  /clear        - Clear console output",
                 "  Ctrl+D        - Exit the CLI");
     }
