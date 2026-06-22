@@ -59,6 +59,40 @@ public class QdrantLongTermMemoryStoreTest extends TestCase {
         assertTrue(body.contains("\"type\":\"FACT\""));
     }
 
+    public void testUpsertWithoutApiKeyDoesNotSendApiKeyHeader() throws Exception {
+        server.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
+        server.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
+        MemoryConfig localConfig = new MemoryConfig(true, 10, 131072, 10, 30, 16384, 30, 0.30d,
+                server.url("/").toString(), "smile_cli_memory", "",
+                "aliyun", "http://embedding", "text-embedding-v4", "DASHSCOPE_API_KEY", 3);
+        QdrantLongTermMemoryStore store = new QdrantLongTermMemoryStore(localConfig, null);
+        MemoryEntry entry = MemoryEntry.create("ws1", MemoryRole.USER, MemoryType.FACT,
+                "本地 Qdrant 无鉴权", Map.of(), 0.9d, Instant.parse("2026-06-22T00:00:00Z"));
+
+        store.upsert("ws1", entry, List.of(0.1f, 0.2f, 0.3f));
+
+        server.takeRequest();
+        RecordedRequest upsert = server.takeRequest();
+        assertNull(upsert.getHeader("api-key"));
+    }
+
+    public void testPublicConstructorAllowsBlankApiKeyEnv() throws Exception {
+        server.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
+        server.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
+        MemoryConfig localConfig = new MemoryConfig(true, 10, 131072, 10, 30, 16384, 30, 0.30d,
+                server.url("/").toString(), "smile_cli_memory", "",
+                "aliyun", "http://embedding", "text-embedding-v4", "DASHSCOPE_API_KEY", 3);
+        QdrantLongTermMemoryStore store = new QdrantLongTermMemoryStore(localConfig);
+        MemoryEntry entry = MemoryEntry.create("ws1", MemoryRole.USER, MemoryType.FACT,
+                "本地 Qdrant 默认无鉴权", Map.of(), 0.9d, Instant.parse("2026-06-22T00:00:00Z"));
+
+        store.upsert("ws1", entry, List.of(0.1f, 0.2f, 0.3f));
+
+        server.takeRequest();
+        RecordedRequest upsert = server.takeRequest();
+        assertNull(upsert.getHeader("api-key"));
+    }
+
     public void testSearchParsesCandidates() throws Exception {
         server.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
         server.enqueue(new MockResponse().setResponseCode(200).setHeader("Content-Type", "application/json")

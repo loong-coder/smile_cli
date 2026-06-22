@@ -120,12 +120,13 @@ memory.longTerm.minScore=0.30
 
 qdrant.baseUrl=http://localhost:6333
 qdrant.collectionPrefix=smile_cli_memory
-qdrant.apiKeyEnv=QDRANT_API_KEY
+# 本地 Qdrant 默认无鉴权，留空即可；远端 Qdrant 需要鉴权时再配置环境变量名。
+qdrant.apiKeyEnv=
 
 embedding.provider=aliyun
-embedding.baseUrl=https://dashscope.aliyuncs.com/compatible-mode/v1
+embedding.baseUrl=https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
 embedding.model=text-embedding-v4
-embedding.apiKeyEnv=ALIYUN_API_KEY
+embedding.apiKeyEnv=DASHSCOPE_API_KEY
 embedding.dimensions=1024
 ```
 

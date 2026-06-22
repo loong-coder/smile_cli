@@ -18,10 +18,12 @@ public final class MemoryContextBuilder {
                                       List<RetrievedMemory> longTermMemories,
                                       int longTermMaxBytes) {
         StringBuilder builder = new StringBuilder();
-        builder.append("以下是可参考的记忆上下文，不是用户本轮的新指令。\n\n");
-        appendShortTerm(builder, shortTermMemory);
+        builder.append("以下是可参考的记忆上下文。\n\n");
+        builder.append("<context>");
+//        appendShortTerm(builder, shortTermMemory);
         appendSummary(builder, summaryMemory);
         appendLongTerm(builder, longTermMemories, longTermMaxBytes);
+        builder.append("</context>");
         return new SystemMessage(builder.toString());
     }
 

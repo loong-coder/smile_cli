@@ -28,7 +28,7 @@ public class QdrantLongTermMemoryStore implements LongTermMemoryStore {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public QdrantLongTermMemoryStore(MemoryConfig config) {
-        this(config, System.getenv(config.qdrantApiKeyEnv()));
+        this(config, resolveApiKey(config));
     }
 
     QdrantLongTermMemoryStore(MemoryConfig config, String apiKey) {
@@ -38,6 +38,15 @@ public class QdrantLongTermMemoryStore implements LongTermMemoryStore {
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .build();
+    }
+
+    private static String resolveApiKey(MemoryConfig config) {
+        String apiKeyEnv = config.qdrantApiKeyEnv();
+        if (apiKeyEnv == null || apiKeyEnv.isBlank()) {
+            // 本地 Qdrant 常见部署没有鉴权，此时不发送 api-key 请求头。
+            return null;
+        }
+        return System.getenv(apiKeyEnv);
     }
 
     @Override

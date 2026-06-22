@@ -33,11 +33,12 @@ public class LlmConfig {
         props.setProperty("memory.longTerm.minScore", "0.30");
         props.setProperty("qdrant.baseUrl", "http://localhost:6333");
         props.setProperty("qdrant.collectionPrefix", "smile_cli_memory");
-        props.setProperty("qdrant.apiKeyEnv", "QDRANT_API_KEY");
+        // 本地 Qdrant 默认无鉴权；需要远端鉴权时再显式配置 API Key 环境变量名。
+        props.setProperty("qdrant.apiKeyEnv", "");
         props.setProperty("embedding.provider", "aliyun");
         props.setProperty("embedding.baseUrl", "https://dashscope.aliyuncs.com/compatible-mode/v1");
         props.setProperty("embedding.model", "text-embedding-v4");
-        props.setProperty("embedding.apiKeyEnv", "ALIYUN_API_KEY");
+        props.setProperty("embedding.apiKeyEnv", "DASHSCOPE_API_KEY");
         props.setProperty("embedding.dimensions", "1024");
 
         loadConfigFile();

@@ -23,12 +23,34 @@ public class LlmConfigMemoryTest extends TestCase {
         assertEquals(0.30d, memoryConfig.minScore());
         assertEquals("http://localhost:6333", memoryConfig.qdrantBaseUrl());
         assertEquals("smile_cli_memory", memoryConfig.qdrantCollectionPrefix());
-        assertEquals("QDRANT_API_KEY", memoryConfig.qdrantApiKeyEnv());
+        assertEquals("", memoryConfig.qdrantApiKeyEnv());
         assertEquals("aliyun", memoryConfig.embeddingProvider());
-        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1", memoryConfig.embeddingBaseUrl());
+        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings", memoryConfig.embeddingBaseUrl());
         assertEquals("text-embedding-v4", memoryConfig.embeddingModel());
-        assertEquals("ALIYUN_API_KEY", memoryConfig.embeddingApiKeyEnv());
+        assertEquals("DASHSCOPE_API_KEY", memoryConfig.embeddingApiKeyEnv());
         assertEquals(1024, memoryConfig.embeddingDimensions());
+    }
+
+    public void testMemoryConfigAllowsLocalQdrantWithoutApiKeyEnv() {
+        MemoryConfig memoryConfig = new MemoryConfig(
+                true,
+                10,
+                131072,
+                10,
+                30,
+                16384,
+                30,
+                0.30d,
+                "http://localhost:6333",
+                "smile_cli_memory",
+                "",
+                "aliyun",
+                "http://embedding",
+                "text-embedding-v4",
+                "DASHSCOPE_API_KEY",
+                1024);
+
+        assertTrue(memoryConfig.hasLongTermConfig());
     }
 
     public void testMemoryConfigReportsMissingLongTermConfiguration() {
