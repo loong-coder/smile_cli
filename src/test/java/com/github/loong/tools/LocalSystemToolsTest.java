@@ -70,8 +70,8 @@ public class LocalSystemToolsTest extends TestCase {
 
         LocalSystemTools.ListDirectoryResult result = tools.listDirectory(".", false, null);
 
-        // toStandardPathString 返回绝对路径
-        assertEquals(workspace.toString(), result.path());
+        // toStandardPathString 返回统一使用斜杠的绝对路径。
+        assertEquals(workspace.toString().replace('\\', '/'), result.path());
         assertEquals(2, result.entries().size());
         assertTrue(containsEntry(result.entries(), "a.txt", false));
         assertTrue(containsEntry(result.entries(), "dir", true));

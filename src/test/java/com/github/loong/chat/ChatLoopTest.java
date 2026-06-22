@@ -17,6 +17,12 @@ public class ChatLoopTest extends TestCase {
         assertTrue(output.contains("/clear        - Clear console output"));
     }
 
+    public void testRenderHelpLinesShowsMemoryCommand() {
+        String output = String.join("\n", ChatLoop.renderHelpLines());
+
+        assertTrue(output.contains("/memory      - Manage memory status, search, and clear"));
+    }
+
     public void testRenderToolsShowsInstalledToolDescriptions() {
         List<ToolDefinition> tools = List.of(
                 new ToolDefinition("search_docs", "Search Docs", "Search project documentation", Map.of(), null),

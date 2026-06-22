@@ -13,6 +13,7 @@
   - `list_directory`：列出工作区内目录内容。
   - `execute_command`：在工作区内执行非 shell 命令数组。
 - 工具访问范围限制在 CLI 启动目录内，避免越权访问工作区外文件。
+- 支持 agent 长短期记忆：当前会话保留最近 10 轮短期记忆，超过 128kb 或轮次限制后生成滚动摘要，并通过 Qdrant + 阿里云 embedding 检索当前工作区相关长期记忆。
 - 使用 Swagger 注解和 JSON Schema 自动生成工具描述。
 - 错误日志写入 `logs/smile_cli-error.log`，支持按大小和日期滚动。
 
@@ -25,7 +26,7 @@
 - Jackson：JSON 序列化与反序列化
 - Swagger Annotations + victools/jsonschema-generator：工具参数 Schema 生成
 - Logback：日志记录
-- JUnit 3.8.1：单元测试
+- JUnit 4.13.2：单元测试（兼容现有 JUnit 3 风格测试类）
 
 ## 项目结构
 
@@ -103,6 +104,33 @@ api.baseUrl=https://api.deepseek.com
 
 `api.baseUrl` 末尾的 `/` 会被自动去除，请不要在配置中包含 `/v1/chat/completions` 路径，程序会自动拼接该接口路径。
 
+### 3. 可选记忆系统配置
+
+记忆系统默认启用短期记忆和摘要记忆。长期记忆需要 Qdrant 和阿里云 embedding 配置完整后才会启用：
+
+```properties
+memory.enabled=true
+memory.shortTerm.maxRounds=10
+memory.shortTerm.maxBytes=131072
+memory.longTerm.topK=10
+memory.longTerm.candidateK=30
+memory.longTerm.injectMaxBytes=16384
+memory.longTerm.timeDecayHalfLifeDays=30
+memory.longTerm.minScore=0.30
+
+qdrant.baseUrl=http://localhost:6333
+qdrant.collectionPrefix=smile_cli_memory
+qdrant.apiKeyEnv=QDRANT_API_KEY
+
+embedding.provider=aliyun
+embedding.baseUrl=https://dashscope.aliyuncs.com/compatible-mode/v1
+embedding.model=text-embedding-v4
+embedding.apiKeyEnv=ALIYUN_API_KEY
+embedding.dimensions=1024
+```
+
+长期记忆按 CLI 启动目录生成工作区 ID，不同项目默认写入不同的 Qdrant collection。
+
 ## 构建
 
 ```bash
@@ -147,6 +175,9 @@ java -jar target/smile_cli-1.0-SNAPSHOT.jar
 | --- | --- |
 | `/help` | 查看帮助信息 |
 | `/tools` | 查看已注册工具 |
+| `/memory status` | 查看当前工作区记忆状态 |
+| `/memory search <query>` | 检索当前工作区长期记忆 |
+| `/memory clear` | 清理当前工作区短期、摘要和长期记忆 |
 | `/clear` | 清空终端输出 |
 | `/exit`、`/quit` | 退出 CLI |
 | `Ctrl+D` | 退出 CLI |
