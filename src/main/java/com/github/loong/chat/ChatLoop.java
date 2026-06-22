@@ -1,6 +1,7 @@
 package com.github.loong.chat;
 
 import com.github.loong.agent.Agent;
+import com.github.loong.memory.MemoryCommand;
 import com.github.loong.message.AssistantMessage;
 import com.github.loong.message.Message;
 import com.github.loong.plan.PlanCommand;
@@ -56,6 +57,18 @@ public class ChatLoop {
                     }
                     continue;
                 default:
+                    if (input.startsWith("/memory")) {
+                        MemoryCommand command = new MemoryCommand(context.memoryService());
+                        boolean confirmed = true;
+                        if ("/memory clear".equals(input)) {
+                            String confirm = terminalManager.readInput("Clear current workspace memory? type yes to confirm: ");
+                            confirmed = "yes".equalsIgnoreCase(confirm == null ? "" : confirm.trim());
+                        }
+                        for (String line : command.execute(input, confirmed)) {
+                            terminalManager.printInfo(line);
+                        }
+                        continue;
+                    }
                     // /plan 命令需要处理带参数的情况
                     if (input.startsWith("/plan")) {
                         String taskDesc = input.substring("/plan".length()).trim();
@@ -89,6 +102,7 @@ public class ChatLoop {
                 "  /exit, /quit  - Exit the CLI",
                 "  /help         - Show this help",
                 "  /tools        - Show installed tools",
+                "  /memory      - Manage memory status, search, and clear",
                 "  /plan <desc>  - Generate task execution plan",
                 "  /clear        - Clear console output",
                 "  Ctrl+D        - Exit the CLI");

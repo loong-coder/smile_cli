@@ -1,8 +1,6 @@
 package com.github.loong.agent;
 
-import cn.hutool.core.bean.BeanUtil;
 import com.github.loong.chat.ChatContext;
-import com.github.loong.chat.ChatLoop;
 import com.github.loong.llm.ChatResult;
 import com.github.loong.llm.LLmClient;
 import com.github.loong.message.*;
@@ -33,6 +31,9 @@ public class Agent {
         UserMessage userMsg = new UserMessage(input);
         List<Message> messageList = context.messages();
         messageList.add(userMsg);
+        if (context.memoryService() != null) {
+            context.memoryService().recordUserMessage(input);
+        }
 
         @SuppressWarnings("resource")
         TerminalManager terminalManager = context.terminalManager();
@@ -59,12 +60,18 @@ public class Agent {
             try {
                 List<Message> messagesNews = new ArrayList<>();
                 messagesNews.add(mainAgent);
+                if (context.memoryService() != null) {
+                    Message memoryMessage = context.memoryService().buildMemoryContext(input);
+                    if (memoryMessage != null) {
+                        messagesNews.add(memoryMessage);
+                    }
+                }
                 messagesNews.addAll(messageList);
                 result = llmClient.chat(messagesNews,
                         context.toolDefinitions(),
-                        terminalManager::printToken,
-                        terminalManager::printThinking,
-                        terminalManager::printError);
+                        terminalManager == null ? ignored -> { } : terminalManager::printToken,
+                        terminalManager == null ? ignored -> { } : terminalManager::printThinking,
+                        terminalManager == null ? ignored -> { } : terminalManager::printError);
             } catch (Exception e) {
                 LOGGER.error("llm client char error", e);
                 messages.add(new AssistantMessage("[模型调用过程发生一次]" + e.toString()));
@@ -74,17 +81,32 @@ public class Agent {
             }
             // 存在工具调用 调用工具后返回
             if (result.hasToolCalls()) {
-                messages.add(new AssistantMessage(result.content(), result.reasoningContent(), result.toolCalls()));
+                AssistantMessage assistantMessage = new AssistantMessage(result.content(), result.reasoningContent(), result.toolCalls());
+                messages.add(assistantMessage);
+                if (context.memoryService() != null) {
+                    context.memoryService().recordAssistantToolCall(result.content());
+                }
                 for (AssistantMessage.ToolCall call : result.toolCalls()) {
-                    messages.add(new ToolMessage(call.id(), context.toolCallExecutor().execute(call)));
+                    String toolResult = context.toolCallExecutor().execute(call);
+                    messages.add(new ToolMessage(call.id(), toolResult));
+                    if (context.memoryService() != null) {
+                        context.memoryService().recordToolResult(call.id(), toolResult);
+                    }
                 }
                 continue;
             }
 
             if (!result.content().isEmpty()) {
                 messages.add(new AssistantMessage(result.content()));
+                if (context.memoryService() != null) {
+                    context.memoryService().recordAssistantMessage(result.content());
+                }
             } else {
-                messages.add(new AssistantMessage("[模型未返回有效内容，本轮回复失败]"));
+                String fallback = "[模型未返回有效内容，本轮回复失败]";
+                messages.add(new AssistantMessage(fallback));
+                if (context.memoryService() != null) {
+                    context.memoryService().recordAssistantMessage(fallback);
+                }
             }
             return;
         }

@@ -1,6 +1,7 @@
 package com.github.loong.chat;
 
 import com.github.loong.llm.LLmClient;
+import com.github.loong.memory.MemoryService;
 import com.github.loong.message.Message;
 import com.github.loong.tools.executor.ToolCallExecutor;
 import com.github.loong.tools.ToolDefinition;
@@ -21,14 +22,16 @@ public class ChatContext {
     private final List<ToolDefinition> toolDefinitions;
     private final List<Message> messages;
     private final Map<String, Message> agentSystemPrompts;
+    private final MemoryService memoryService;
 
     private ChatContext(Builder builder) {
-        this.terminalManager = Objects.requireNonNull(builder.terminalManager, "terminalManager cannot be null");
+        this.terminalManager = builder.terminalManager;
         this.llmClient = Objects.requireNonNull(builder.llmClient, "llmClient cannot be null");
-        this.toolCallExecutor = Objects.requireNonNull(builder.toolCallExecutor, "toolCallExecutor cannot be null");
+        this.toolCallExecutor = builder.toolCallExecutor;
         this.toolDefinitions = List.copyOf(Objects.requireNonNull(builder.toolDefinitions, "toolDefinitions cannot be null"));
         this.messages = Objects.requireNonNull(builder.messages, "messages cannot be null");
         this.agentSystemPrompts = Objects.requireNonNull(builder.agentSystemPrompts, "agentSystemPrompts cannot be null");
+        this.memoryService = builder.memoryService;
     }
 
     public static Builder builder() {
@@ -59,6 +62,10 @@ public class ChatContext {
         return agentSystemPrompts;
     }
 
+    public MemoryService memoryService() {
+        return memoryService;
+    }
+
     /**
      * 分步收集会话依赖，避免构造函数参数持续膨胀。
      */
@@ -70,6 +77,7 @@ public class ChatContext {
         private List<ToolDefinition> toolDefinitions;
         private List<Message> messages;
         private Map<String, Message> agentSystemPrompts;
+        private MemoryService memoryService;
 
         public Builder terminalManager(TerminalManager terminalManager) {
             this.terminalManager = terminalManager;
@@ -98,6 +106,11 @@ public class ChatContext {
 
         public Builder agentSystemPrompts(Map<String, Message> agentSystemPrompts) {
             this.agentSystemPrompts = agentSystemPrompts;
+            return this;
+        }
+
+        public Builder memoryService(MemoryService memoryService) {
+            this.memoryService = memoryService;
             return this;
         }
 
